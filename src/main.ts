@@ -294,7 +294,7 @@ function setupClickHandlers() {
 
 setupClickHandlers();
 
-document.getElementById('pay-btn')!.addEventListener('click', () => {
+document.getElementById('pay-btn')!.addEventListener('click', async () => {
   const name = (document.getElementById('cust-name') as HTMLInputElement).value;
   const phone = (document.getElementById('cust-phone') as HTMLInputElement).value;
   const address = (document.getElementById('cust-address') as HTMLInputElement).value;
@@ -303,24 +303,50 @@ document.getElementById('pay-btn')!.addEventListener('click', () => {
     return alert("Please fill Name, Phone and Address!");
   }
 
-  cart = [];
-  updateCartUI();
-  successModal.style.display = 'flex';
-});
+  const totalAmount = cart.reduce((sum, item) => sum + item.price, 0);
 
-document.getElementById('close-modal-btn')!.addEventListener('click', () => {
-  successModal.style.display = 'none';
-});
+  try {
+    // 1. మన Live Vercel Backend కి రిక్వెస్ట్ పంపి Order ID క్రియేట్ చేస్తున్నాం
+    const response = await fetch('https://srisri-healthy-foods.vercel.app/api/create-order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ amount: totalAmount })
+    });
 
-document.getElementById('msg-submit-btn')!.addEventListener('click', () => {
-  const msgName = (document.getElementById('msg-name') as HTMLInputElement).value;
-  const msgEmail = (document.getElementById('msg-email') as HTMLInputElement).value;
+    const data = await response.json();
 
-  if (!msgName || !msgEmail) {
-    return alert("Please fill both Name and Email in the Contact box!");
+    if (!data.success) {
+      return alert("Backend Server Error! Payment failed.");
+    }
+
+    // 2. Razorpay పాప్-అప్ ఆప్షన్స్ సెట్ చేస్తున్నాం
+    const options = {
+      key: "rzp_test_rS9xJp4E1G9vO8", // నీ బ్యాకెండ్ లో ఉన్న అదే టెస్ట్ కీ
+      amount: data.amount,
+      currency: "INR",
+      name: "Sri Sri Healthy Foods",
+      description: "Healthy Juice Order",
+      order_id: data.order_id, // బ్యాకెండ్ నుండి వచ్చిన ఐడీ
+      handler: function (response: any) {
+        // పేమెంట్ సక్సెస్ అయ్యాక జరిగే పని
+        alert("Payment Successful! Payment ID: " + response.razorpay_payment_id);
+        cart = [];
+        updateCartUI();
+        successModal.style.display = 'flex';
+      },
+      prefill: {
+        name: name,
+        contact: phone
+      },
+      theme: { color: "#1e4620" }
+    };
+
+    // 3. Razorpay గేట్‌వే ని ఓపెన్ చేస్తున్నాం
+    const rzp = new (window as any).Razorpay(options);
+    rzp.open();
+
+  } catch (err) {
+    console.error(err);
+    alert("Cannot connect to backend server!");
   }
-
-  alert(`Thank you, ${msgName}! Your message has been submitted successfully.`);
-  (document.getElementById('msg-name') as HTMLInputElement).value = '';
-  (document.getElementById('msg-email') as HTMLInputElement).value = '';
 });
